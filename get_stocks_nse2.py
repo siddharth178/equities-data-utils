@@ -30,7 +30,7 @@ import time
 
 from zipfile import ZipFile
 
-from nse_utils import get_name_change_tuples, ScripOHLCVD
+from nse_utils import nse_get_name_change_tuples, ScripOHLCVD
 import utils
 
 import sqlite3
@@ -70,7 +70,7 @@ _update_name_changes_stmt = '''update nse_hist_data set name = '{}' where name i
 
 _date_fmt = '%d-%m-%Y'
 
-_bhav_url_base = 'http://nseindia.com/content/historical/EQUITIES/' \
+_bhav_url_base = 'https://www.nseindia.com/content/historical/EQUITIES/' \
                 '%(year)s/%(mon)s/cm%(dd)s%(mon)s%(year)sbhav.csv.zip'
 
 _deliv_url_base = 'http://nseindia.com/archives/equities/mto/' \
@@ -107,19 +107,30 @@ def get_bhavcopy(date='01-01-2002'):
     bhav_url = _bhav_url_base % ({'year':yr, 'mon':mon, 'dd':dd})
     deliv_url = _deliv_url_base % ({'year':yr, 'mm':mm, 'dd':dd})
 
-    x = requests.get(bhav_url)
+    bhav_headers = {
+                "Referer": "https://www.nseindia.com/products/content/equities/equities/archieve_eq.htm",
+                "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/51.0.2704.84 Safari/537.36"
+            }
+    print "bhav_url:", bhav_url
+    x = requests.get(bhav_url, headers=bhav_headers)
 
+    print "deliv_url:", deliv_url
     y = requests.get(deliv_url)
     stocks_dict = {}
-    _update_dload_success(fdate, x.ok, y.ok)
     if x.ok and y.ok:
+        _update_dload_success(fdate, x.ok, y.ok)
         z = ZipFile(bio(x.content))
         for name in z.namelist():
             csv_name = name
         delivery = bio(y.text)
+
+        archive_file_name = "data/cm%(dd)s%(mon)s%(year)sbhav.csv" % ({'year':yr, 'mon':mon, 'dd':dd})
+        print "Keeping a copy in:", archive_file_name
+        csv_archive_file = open(archive_file_name, 'w')
         with z.open(csv_name) as bhav:
             i = 0
             for line in bhav:
+                csv_archive_file.write(line)
                 if i == 0:
                     i += 1
                     continue
@@ -128,6 +139,7 @@ def get_bhavcopy(date='01-01-2002'):
                                                 l[5], l[8], l[8]
                 stocks_dict[sym] = [float(o), float(h), float(l), float(c),
                                     int(v), int(d)]
+        csv_archive_file.close()
         i = 0
         for line in delivery:
             if not line.startswith('20'):
@@ -143,6 +155,10 @@ def get_bhavcopy(date='01-01-2002'):
         for sym in stocks_dict.keys():
             stocks_dict[sym] = ScripOHLCVD(*stocks_dict[sym])
         return stocks_dict
+    else:
+        print "Failed to fetch bhavcopy and/or deliv data"
+        print "Bhavcopy status:", x
+        print "Deliv status:", y
 
 def _update_dload_success(fdate, bhav_ok, deliv_ok, fname=None):
     """ Update whether bhavcopy download and delivery data download for given
