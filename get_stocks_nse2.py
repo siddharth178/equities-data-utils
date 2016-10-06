@@ -155,6 +155,11 @@ def get_bhavcopy(date='01-01-2002'):
         for sym in stocks_dict.keys():
             stocks_dict[sym] = ScripOHLCVD(*stocks_dict[sym])
         return stocks_dict
+    elif x.status_code == 404 and y.status_code == 404:
+        _update_dload_success(fdate, x.ok, y.ok)
+        print "Failed to fetch bhavcopy and/or deliv data"
+        print "Bhavcopy status:", x
+        print "Deliv status:", y
     else:
         print "Failed to fetch bhavcopy and/or deliv data"
         print "Bhavcopy status:", x
@@ -284,7 +289,8 @@ if __name__ == '__main__':
         if scrips_dict is not None:
             _update_bhavcopy(str_curdate, scrips_dict)
 
-        time.sleep(random.randrange(1,10))
+            print "Sleeping..."
+            time.sleep(random.randrange(1,10))
 
         cur_date += td(1)
 
